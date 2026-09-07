@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from threading import Event
 
 from osint_engine.adapters.maigret_adapter import _ProgressNotifier
@@ -59,3 +61,32 @@ def test_progress_notifier_does_not_mark_cancelled_run_complete():
     notifier.finish()
 
     assert events[-1][1] == 1
+
+
+def test_notifier_smoke_test_with_installed_maigret_api():
+    from maigret import search as maigret_search
+
+    events = []
+    notifier = _ProgressNotifier(
+        "maigret",
+        1,
+        lambda *args: events.append(args),
+        identifier="alias",
+        grand_total=1,
+        cancel_event=Event(),
+    )
+
+    result = asyncio.run(
+        maigret_search(
+            username="alias",
+            site_dict={},
+            logger=logging.getLogger("test.maigret"),
+            query_notify=notifier,
+            timeout=1,
+            max_connections=1,
+            no_progressbar=True,
+        )
+    )
+
+    assert result == {}
+    assert events
