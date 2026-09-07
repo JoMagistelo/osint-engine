@@ -6,7 +6,7 @@ from threading import Event
 from .adapters import MaigretAdapter, ProgressCallback, SpiderFootAdapter
 from .correlation import deduplicate_findings
 from .models import Finding, Investigation, InvestigationSeed, utc_now_iso
-from .normalization import conservative_alias_candidates, normalize_seed, validate_seed
+from .normalization import normalize_seed, username_search_candidates, validate_seed
 
 
 class InvestigationEngine:
@@ -33,25 +33,7 @@ class InvestigationEngine:
             status="running",
         )
         investigation.findings.extend(self._seed_findings(normalized))
-
-        if normalized.derive_aliases:
-            for alias in conservative_alias_candidates(normalized):
-                investigation.findings.append(
-                    Finding(
-                        finding_id=str(uuid.uuid4()),
-                        entity_type="username_candidate",
-                        value=alias,
-                        source_engine="osint-engine",
-                        confidence=0.35,
-                        status="hypothesis",
-                        relation="derived_from_email",
-                        parent_value=normalized.email,
-                        evidence={
-                            "rule": "email_local_part",
-                            "warning": "Hipótesis; no prueba identidad.",
-                        },
-                    )
-                )
+        investigation.findings.extend(self._candidate_findings(normalized))
 
         for adapter in self.adapters:
             if cancel_event.is_set():
@@ -88,6 +70,31 @@ class InvestigationEngine:
                     status="provided",
                     relation="seed",
                     evidence={"case_id": seed.case_id},
+                )
+            )
+        return findings
+
+    @staticmethod
+    def _candidate_findings(seed: InvestigationSeed) -> list[Finding]:
+        findings: list[Finding] = []
+        for candidate in username_search_candidates(seed):
+            if candidate.origin == "provided_username":
+                continue
+            findings.append(
+                Finding(
+                    finding_id=str(uuid.uuid4()),
+                    entity_type="username_candidate",
+                    value=candidate.value,
+                    source_engine="osint-engine",
+                    confidence=candidate.confidence,
+                    status="hypothesis",
+                    relation=candidate.relation,
+                    parent_value=candidate.parent_value,
+                    evidence={
+                        "rule": candidate.origin,
+                        "searched_by_maigret": True,
+                        "warning": "Hipótesis de alias; no prueba identidad.",
+                    },
                 )
             )
         return findings
