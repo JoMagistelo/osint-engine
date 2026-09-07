@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import uuid
 from importlib.resources import files
@@ -126,6 +127,7 @@ class MaigretAdapter:
         logger.addHandler(logging.NullHandler())
         all_findings: list[Finding] = []
         grand_total = max(len(sites) * len(candidates), 1)
+        supports_partial_output = "output_container" in inspect.signature(maigret_search).parameters
 
         for index, candidate in enumerate(candidates):
             if cancel_event.is_set():
@@ -141,19 +143,20 @@ class MaigretAdapter:
                 cancel_event=cancel_event,
             )
             partial_results: dict[str, Any] = {}
-            task = asyncio.create_task(
-                maigret_search(
-                    username=candidate.value,
-                    site_dict=sites,
-                    logger=logger,
-                    query_notify=notifier,
-                    timeout=self.timeout,
-                    is_parsing_enabled=True,
-                    max_connections=40,
-                    no_progressbar=True,
-                    output_container=partial_results,
-                )
-            )
+            search_kwargs: dict[str, Any] = {
+                "username": candidate.value,
+                "site_dict": sites,
+                "logger": logger,
+                "query_notify": notifier,
+                "timeout": self.timeout,
+                "is_parsing_enabled": True,
+                "max_connections": 40,
+                "no_progressbar": True,
+            }
+            if supports_partial_output:
+                search_kwargs["output_container"] = partial_results
+
+            task = asyncio.create_task(maigret_search(**search_kwargs))
             watcher = asyncio.create_task(self._cancel_watcher(task, cancel_event))
             try:
                 results = await task
