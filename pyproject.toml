@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "osint-engine-institucional"
+version = "0.1.0"
+description = "Motor institucional de análisis OSINT basado en fuentes públicas y evidencia trazable."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "maigret>=0.6.5,<0.7",
+]
+
+[project.optional-dependencies]
+desktop = [
+    "flet>=0.86.5,<0.87",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9,<10",
+    "ruff>=0.14,<1",
+]
+packaging = [
+    "pyinstaller>=6.19,<7",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82"]
