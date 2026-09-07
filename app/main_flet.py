@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import math
@@ -55,18 +55,18 @@ def main(page: ft.Page) -> None:
     person_name = ft.TextField(label="Nombre", height=46, text_size=12, prefix_icon=ft.Icons.PERSON)
     username = ft.TextField(label="Usuario / alias", height=46, text_size=12, prefix_icon=ft.Icons.ALTERNATE_EMAIL)
     email = ft.TextField(label="Correo", height=46, text_size=12, prefix_icon=ft.Icons.EMAIL)
-    phone = ft.TextField(label="Teléfono", height=46, text_size=12, prefix_icon=ft.Icons.PHONE)
+    phone = ft.TextField(label="TelÃ©fono", height=46, text_size=12, prefix_icon=ft.Icons.PHONE)
     derive_aliases = ft.Checkbox(
-        label="Probar como hipótesis el alias derivado del correo",
+        label="Probar como hipÃ³tesis el alias derivado del correo",
         value=False,
-        tooltip="El texto antes de @ se marca como hipótesis de baja confianza; no prueba identidad.",
+        tooltip="El texto antes de @ se marca como hipÃ³tesis de baja confianza; no prueba identidad.",
     )
 
     status_text = ft.Text("Listo", size=11, color=TEXT_MUTED)
     progress_text = ft.Text("", size=11, color=TEXT_MUTED)
     progress_bar = ft.ProgressBar(value=0, visible=False, color=GOB_GREEN)
     run_button = ft.FilledButton(
-        content="Iniciar análisis",
+        content="Iniciar anÃ¡lisis",
         icon=ft.Icons.SEARCH,
         bgcolor=GOB_GREEN,
         color=ft.Colors.WHITE,
@@ -104,9 +104,9 @@ def main(page: ft.Page) -> None:
                     tabs=[
                         ft.Tab(label="Resumen", icon=ft.Icons.DASHBOARD),
                         ft.Tab(label="Hallazgos", icon=ft.Icons.TRAVEL_EXPLORE),
-                        ft.Tab(label="Red de vínculos", icon=ft.Icons.HUB),
+                        ft.Tab(label="Red de vÃ­nculos", icon=ft.Icons.HUB),
                         ft.Tab(label="Evidencias", icon=ft.Icons.FACT_CHECK),
-                        ft.Tab(label="Auditoría", icon=ft.Icons.RECEIPT_LONG),
+                        ft.Tab(label="AuditorÃ­a", icon=ft.Icons.RECEIPT_LONG),
                     ]
                 ),
                 ft.TabBarView(
@@ -160,7 +160,7 @@ def main(page: ft.Page) -> None:
                         engine_key, checked, total, detail = payload
                         progress_bar.visible = total > 0
                         progress_bar.value = (checked / total) if total else 0
-                        progress_text.value = f"{engine_key}: {checked}/{total} · {detail}"
+                        progress_text.value = f"{engine_key}: {checked}/{total} Â· {detail}"
                     elif kind == "done":
                         finish(payload)
                         return
@@ -189,7 +189,7 @@ def main(page: ft.Page) -> None:
         progress_bar.visible = True
         progress_bar.value = 0
         progress_text.value = "Preparando motores..."
-        status_text.value = "Analizando fuentes públicas"
+        status_text.value = "Analizando fuentes pÃºblicas"
         summary_view.controls.clear()
         findings_view.controls.clear()
         evidence_view.controls.clear()
@@ -199,7 +199,7 @@ def main(page: ft.Page) -> None:
             expand=True,
         )
         log_view.controls.clear()
-        log(f"Inicio de investigación: {safe_seed_summary(seed.person_name, seed.username, seed.email, seed.phone)}")
+        log(f"Inicio de investigaciÃ³n: {safe_seed_summary(seed.person_name, seed.username, seed.email, seed.phone)}")
         threading.Thread(target=worker, args=(seed,), daemon=True).start()
         page.run_task(poll_events)
         page.update()
@@ -209,8 +209,8 @@ def main(page: ft.Page) -> None:
             return
         cancel_event.set()
         stop_button.disabled = True
-        status_text.value = "Detención solicitada; se conservarán los hallazgos ya obtenidos."
-        log("Detención solicitada por el operador.")
+        status_text.value = "DetenciÃ³n solicitada; se conservarÃ¡n los hallazgos ya obtenidos."
+        log("DetenciÃ³n solicitada por el operador.")
         page.update()
 
     def finish(investigation: Investigation) -> None:
@@ -222,9 +222,9 @@ def main(page: ft.Page) -> None:
         progress_text.value = ""
         export_button.disabled = False
         status_text.value = (
-            "Análisis detenido con resultados parciales"
+            "AnÃ¡lisis detenido con resultados parciales"
             if investigation.status == "cancelled"
-            else "Análisis concluido"
+            else "AnÃ¡lisis concluido"
         )
         render_investigation(investigation)
         log(
@@ -238,7 +238,7 @@ def main(page: ft.Page) -> None:
         run_button.disabled = False
         stop_button.visible = False
         progress_bar.visible = False
-        status_text.value = "Error de ejecución"
+        status_text.value = "Error de ejecuciÃ³n"
         page.show_dialog(ft.SnackBar(ft.Text(message)))
         log(f"Error de motor: {message}")
         page.update()
@@ -254,7 +254,7 @@ def main(page: ft.Page) -> None:
             return
         folder = paths[0].parent
         page.show_dialog(ft.SnackBar(ft.Text(f"Exportados JSON, CSV y GraphML en: {folder}")))
-        log(f"Exportación generada en {folder}")
+        log(f"ExportaciÃ³n generada en {folder}")
 
     def render_investigation(investigation: Investigation) -> None:
         account_findings = [f for f in investigation.findings if f.entity_type == "social_account"]
@@ -265,17 +265,17 @@ def main(page: ft.Page) -> None:
                 controls=[
                     metric("Identificadores", str(len(provided))),
                     metric("Perfiles encontrados", str(len(account_findings))),
-                    metric("Hipótesis", str(len(candidates))),
+                    metric("HipÃ³tesis", str(len(candidates))),
                     metric("Estado", investigation.status.replace("_", " ").title()),
                 ],
             ),
             ft.Container(
                 content=ft.Column(
                     [
-                        ft.Text("Criterio de interpretación", weight=ft.FontWeight.BOLD, size=13),
+                        ft.Text("Criterio de interpretaciÃ³n", weight=ft.FontWeight.BOLD, size=13),
                         ft.Text(
                             "Una coincidencia de usuario confirma que ese alias existe en el sitio consultado; "
-                            "no demuestra por sí sola que todas las cuentas pertenezcan a la misma persona.",
+                            "no demuestra por sÃ­ sola que todas las cuentas pertenezcan a la misma persona.",
                             size=11,
                             color=TEXT_MUTED,
                         ),
@@ -342,7 +342,7 @@ def main(page: ft.Page) -> None:
                             ft.Text(finding.platform or finding.entity_type, weight=ft.FontWeight.BOLD, size=12),
                             ft.Text(finding.value, size=10, selectable=True, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
                             ft.Text(
-                                f"{finding.status} · confianza {confidence_label(finding.confidence)} ({finding.confidence:.0%})",
+                                f"{finding.status} Â· confianza {confidence_label(finding.confidence)} ({finding.confidence:.0%})",
                                 size=9,
                                 color=TEXT_MUTED,
                             ),
@@ -370,7 +370,7 @@ def main(page: ft.Page) -> None:
             border_radius=8,
             content=ft.Column(
                 [
-                    ft.Text(f"{finding.source_engine} · {finding.platform or finding.entity_type}", weight=ft.FontWeight.BOLD, size=11),
+                    ft.Text(f"{finding.source_engine} Â· {finding.platform or finding.entity_type}", weight=ft.FontWeight.BOLD, size=11),
                     *evidence_lines,
                 ],
                 spacing=3,
@@ -426,7 +426,7 @@ def main(page: ft.Page) -> None:
                 cv.Text(
                     x=cx,
                     y=cy + 70,
-                    value="Aún no hay perfiles para representar.",
+                    value="AÃºn no hay perfiles para representar.",
                     alignment=ft.Alignment.TOP_CENTER,
                     style=ft.TextStyle(size=12, color=TEXT_MUTED),
                 )
@@ -454,7 +454,7 @@ def main(page: ft.Page) -> None:
                 ft.Column(
                     [
                         ft.Text("OSINT Engine Institucional", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                        ft.Text("Análisis de fuentes públicas · evidencia trazable", size=10, color="#DCE7E2"),
+                        ft.Text("AnÃ¡lisis de fuentes pÃºblicas Â· evidencia trazable", size=10, color="#DCE7E2"),
                     ],
                     spacing=1,
                 ),
@@ -472,7 +472,7 @@ def main(page: ft.Page) -> None:
         border_radius=10,
         content=ft.Column(
             [
-                ft.Text("Nueva investigación", size=15, weight=ft.FontWeight.BOLD, color=GOB_GREEN_DARK),
+                ft.Text("Nueva investigaciÃ³n", size=15, weight=ft.FontWeight.BOLD, color=GOB_GREEN_DARK),
                 ft.Text("Capture uno o varios identificadores.", size=10, color=TEXT_MUTED),
                 case_id,
                 person_name,
@@ -485,13 +485,13 @@ def main(page: ft.Page) -> None:
                 ft.ListTile(
                     leading=ft.Icon(ft.Icons.CHECK_CIRCLE, color=GOB_GREEN),
                     title=ft.Text("Maigret", size=11),
-                    subtitle=ft.Text("Activo · usuario/alias", size=9),
+                    subtitle=ft.Text("Activo Â· usuario/alias", size=9),
                     dense=True,
                 ),
                 ft.ListTile(
                     leading=ft.Icon(ft.Icons.LOCK_CLOCK, color=TEXT_MUTED),
                     title=ft.Text("SpiderFoot", size=11),
-                    subtitle=ft.Text("Adaptador preparado · no habilitado en v0.1", size=9),
+                    subtitle=ft.Text("Adaptador preparado Â· no habilitado en v0.1", size=9),
                     dense=True,
                 ),
                 ft.Row([run_button, stop_button], wrap=True),
@@ -517,3 +517,4 @@ def main(page: ft.Page) -> None:
 
 if __name__ == "__main__":
     ft.run(main)
+
