@@ -5,7 +5,7 @@ import inspect
 import logging
 import uuid
 from importlib.resources import files
-from threading import Event
+from threading import Event, Lock
 from typing import Any
 
 from .base import AdapterInfo, ProgressCallback
@@ -14,7 +14,7 @@ from ..normalization import UsernameCandidate, username_search_candidates
 
 
 class _ProgressNotifier:
-    """Implementa el contrato de notificación usado por Maigret 0.6.5+."""
+    """Implementa el contrato de notificación usado por Maigret 0.6.5."""
 
     def __init__(
         self,
@@ -86,9 +86,41 @@ class MaigretAdapter:
         description="Búsqueda pública de nombres de usuario en sitios soportados por Maigret.",
     )
 
-    def __init__(self, top_sites: int = 250, timeout: int = 15) -> None:
-        self.top_sites = top_sites
-        self.timeout = timeout
+    def __init__(self, top_sites: int = 500, timeout: int = 15) -> None:
+        self.top_sites = max(int(top_sites), 1)
+        self.timeout = max(int(timeout), 1)
+        self._prepare_lock = Lock()
+        self._sites: dict[str, Any] | None = None
+        self._maigret_search: Any = None
+        self._report_runs: list[tuple[str, str, dict[str, Any]]] = []
+
+    def prepare(self) -> int:
+        """Carga y conserva en memoria la base de sitios incluida con Maigret."""
+
+        if self._sites is not None and self._maigret_search is not None:
+            return len(self._sites)
+
+        with self._prepare_lock:
+            if self._sites is not None and self._maigret_search is not None:
+                return len(self._sites)
+            try:
+                from maigret import search as maigret_search
+                from maigret.sites import MaigretDatabase
+            except Exception as exc:
+                raise RuntimeError(
+                    'Maigret 0.6.5 no está disponible. Reinstale con pip install -e ".[desktop]".'
+                ) from exc
+
+            data_path = files("maigret").joinpath("resources", "data.json")
+            database = MaigretDatabase().load_from_path(str(data_path))
+            self._sites = database.ranked_sites_dict(top=self.top_sites)
+            self._maigret_search = maigret_search
+            return len(self._sites)
+
+    def report_runs(self) -> list[tuple[str, str, dict[str, Any]]]:
+        """Devuelve las ejecuciones crudas requeridas por el reporte oficial."""
+
+        return list(self._report_runs)
 
     def run(
         self,
@@ -97,12 +129,14 @@ class MaigretAdapter:
         progress: ProgressCallback | None = None,
     ) -> list[Finding]:
         candidates = username_search_candidates(seed)
+        self._report_runs = []
 
         if not candidates:
             if progress:
-                progress(self.info.key, 0, 0, "Sin alias compatible para consultar")
+                progress(self.info.key, 0, 0, "Este modo no requiere Maigret")
             return []
 
+        self.prepare()
         return asyncio.run(self._run_all(candidates, cancel_event, progress))
 
     async def _run_all(
@@ -111,17 +145,12 @@ class MaigretAdapter:
         cancel_event: Event,
         progress: ProgressCallback | None,
     ) -> list[Finding]:
-        try:
-            from maigret import search as maigret_search
-            from maigret.sites import MaigretDatabase
-        except Exception as exc:
-            raise RuntimeError(
-                'Maigret no está instalado correctamente. Ejecute pip install -e ".[desktop]".'
-            ) from exc
-
-        data_path = files("maigret").joinpath("resources", "data.json")
-        database = MaigretDatabase().load_from_path(str(data_path))
-        sites = database.ranked_sites_dict(top=self.top_sites)
+        sites = self._sites or {}
+        maigret_search = self._maigret_search
+        if not sites or maigret_search is None:
+            self.prepare()
+            sites = self._sites or {}
+            maigret_search = self._maigret_search
 
         logger = logging.getLogger("osint_engine.maigret")
         logger.addHandler(logging.NullHandler())
@@ -165,6 +194,8 @@ class MaigretAdapter:
             finally:
                 watcher.cancel()
 
+            results = results or partial_results
+            self._report_runs.append((candidate.value, "username", results))
             all_findings.extend(self._to_findings(candidate, results))
 
             if cancel_event.is_set():
@@ -187,13 +218,22 @@ class MaigretAdapter:
             if not found:
                 continue
 
+            # Maigret almacena el enriquecimiento de perfil en el objeto status.
+            # Se conserva el fallback superior para tolerar cambios menores del
+            # proveedor sin perder compatibilidad.
+            status_ids_data = getattr(status, "ids_data", None) if status else None
+            ids_data = status_ids_data or result.get("ids_data") or {}
+            profile_image = MaigretAdapter._first_text(ids_data.get("image"))
+
             evidence = {
                 "http_status": result.get("http_status"),
                 "rank": result.get("rank"),
-                "ids_data": json_safe(result.get("ids_data") or {}),
-                "seed_origin": candidate.origin,
+                "url_main": result.get("url_main"),
+                "query_time": getattr(status, "query_time", None),
+                "tags": json_safe(getattr(status, "tags", None) or result.get("tags") or []),
+                "ids_data": json_safe(ids_data),
+                "profile_image_url": profile_image,
                 "identifier_checked": candidate.value,
-                "candidate_confidence": candidate.confidence,
             }
             findings.append(
                 Finding(
@@ -203,22 +243,24 @@ class MaigretAdapter:
                     platform=str(site_name),
                     source_engine="maigret",
                     source_url=str(result.get("url_user") or ""),
-                    confidence=round(0.92 * candidate.confidence, 2),
-                    status=(
-                        "confirmed_profile"
-                        if candidate.origin == "provided_username"
-                        else "candidate_profile"
-                    ),
-                    relation=(
-                        "same_username"
-                        if candidate.origin == "provided_username"
-                        else candidate.relation
-                    ),
-                    parent_value=candidate.parent_value or candidate.value,
+                    confidence=0.92,
+                    status="confirmed_profile",
+                    relation="same_username",
+                    parent_value=candidate.value,
                     evidence=evidence,
                 )
             )
         return findings
+
+    @staticmethod
+    def _first_text(value: Any) -> str:
+        if isinstance(value, str):
+            return value.strip()
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                if isinstance(item, str) and item.strip():
+                    return item.strip()
+        return ""
 
     @staticmethod
     async def _cancel_watcher(task: asyncio.Task, cancel_event: Event) -> None:
