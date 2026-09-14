@@ -69,6 +69,15 @@ def test_progress_notifier_does_not_mark_cancelled_run_complete():
     assert events[-1][1] == 1
 
 
+def test_prepare_loads_packaged_maigret_database():
+    adapter = MaigretAdapter(top_sites=5)
+    count = adapter.prepare()
+
+    assert 1 <= count <= 5
+    assert adapter._sites is not None
+    assert len(adapter._sites) == count
+
+
 def test_to_findings_reads_profile_metadata_from_maigret_status():
     candidate = UsernameCandidate(
         value="jose.gomez",
