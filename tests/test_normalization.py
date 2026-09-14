@@ -2,64 +2,57 @@ from osint_engine.models import InvestigationSeed
 from osint_engine.normalization import (
     conservative_alias_candidates,
     normalize_seed,
+    normalize_username,
     username_search_candidates,
     validate_seed,
 )
 
 
-def test_normalize_seed():
+def test_normalize_seed_limits_scope_to_supported_identifiers():
     seed = normalize_seed(
         InvestigationSeed(
             person_name="  José   Pérez ",
             username="@@Usuario_01",
-            email=" Test@Example.COM ",
             phone="+52 (55) 1234-5678",
+            email="legacy@example.com",
+            derive_aliases=True,
         )
     )
     assert seed.person_name == "José Pérez"
     assert seed.username == "Usuario_01"
-    assert seed.email == "test@example.com"
     assert seed.phone == "+525512345678"
+    assert seed.email == ""
+    assert seed.derive_aliases is False
     assert not validate_seed(seed)
 
 
-def test_email_local_part_is_searched_automatically():
-    seed = InvestigationSeed(email="nombre.apellido@example.com", derive_aliases=False)
+def test_email_shaped_username_uses_only_local_part_for_maigret():
+    assert normalize_username("jose.gomez@afasasda.com") == "jose.gomez"
+    seed = normalize_seed(InvestigationSeed(username="jose.gomez@afasasda.com"))
     plan = username_search_candidates(seed)
     assert [(item.value, item.origin) for item in plan] == [
-        ("nombre.apellido", "email_local_part")
+        ("jose.gomez", "provided_username")
     ]
 
 
-def test_explicit_username_deduplicates_email_local_part():
-    seed = InvestigationSeed(
-        username="nombre.apellido",
-        email="nombre.apellido@example.com",
-        derive_aliases=False,
+def test_maigret_plan_does_not_derive_usernames_from_name_or_legacy_email():
+    seed = normalize_seed(
+        InvestigationSeed(
+            person_name="José Cruz Gómez Rodríguez",
+            email="jose.gomez@example.com",
+            derive_aliases=True,
+        )
     )
-    plan = username_search_candidates(seed)
-    assert [(item.value, item.origin) for item in plan] == [
-        ("nombre.apellido", "provided_username")
-    ]
+    assert username_search_candidates(seed) == []
+    assert conservative_alias_candidates(seed) == []
 
 
-def test_name_generates_basic_username_pivots_without_checkbox():
-    seed = InvestigationSeed(person_name="José Rodríguez", derive_aliases=False)
-    assert conservative_alias_candidates(seed) == [
-        "joserodriguez",
-        "jose.rodriguez",
-    ]
+def test_phone_is_a_valid_independent_target():
+    seed = normalize_seed(InvestigationSeed(phone="55 1234 5678"))
+    assert seed.phone == "5512345678"
+    assert not validate_seed(seed)
+    assert username_search_candidates(seed) == []
 
 
-def test_name_generates_expanded_variants_when_enabled():
-    seed = InvestigationSeed(person_name="José Cruz Gómez Rodríguez", derive_aliases=True)
-    values = [item.value for item in username_search_candidates(seed)]
-    assert "joserodriguez" in values
-    assert "jose.rodriguez" in values
-    assert "jose_rodriguez" in values
-    assert "jrodriguez" in values
-    assert "josecruzgomezrodriguez" in values
-
-
-def test_requires_identifier():
-    assert validate_seed(InvestigationSeed())
+def test_requires_supported_identifier():
+    assert validate_seed(normalize_seed(InvestigationSeed(email="legacy@example.com")))

@@ -1,28 +1,59 @@
 # OSINT Engine Institucional
 
-Aplicación de escritorio en **Flet** para organizar investigaciones OSINT basadas en **fuentes públicas**, con evidencia trazable, separación entre hechos e hipótesis y arquitectura de motores intercambiables.
+Aplicación de escritorio en **Flet** para organizar investigaciones OSINT basadas en **fuentes públicas**, con evidencia trazable y una integración directa y reproducible con **Maigret 0.6.5**.
 
-> **Versión 0.1.0:** Maigret se integra como librería Python para búsquedas por usuario/alias. El adaptador SpiderFoot queda preparado pero deshabilitado hasta que se fije y audite un runtime compatible. Osintgram no se distribuye en esta versión.
+> **Versión 0.2.0:** el alcance operativo se concentra en tres tipos de objetivo: **usuario**, **nombre** y **teléfono**. Maigret se ejecuta únicamente en el modo Usuario. Nombre y Teléfono permanecen como investigaciones independientes y no generan alias ni se envían a Maigret.
 
-## Alcance de la primera versión
+## Qué hace esta versión
 
-- entrada por nombre, usuario/alias, correo y teléfono;
-- normalización local de identificadores;
-- búsqueda de perfiles públicos por usuario mediante Maigret;
-- opción explícita para probar el texto local de un correo como **hipótesis** de alias, nunca como identidad confirmada;
-- cancelación del análisis conservando resultados ya obtenidos;
-- resultados con motor, URL, nivel de confianza y evidencia técnica;
-- red visual de vínculos dentro de Flet;
-- exportación JSON, CSV y GraphML;
-- separación `app/`, `src/`, `tests/`, `docs/`, `scripts/`;
-- build Windows con PyInstaller;
-- procesamiento local y sin IA externa por defecto.
+- tres modos claros de entrada: Usuario, Nombre y Teléfono;
+- Maigret como motor principal y único motor externo habilitado;
+- el modo Usuario acepta `jose.gomez`, `@jose.gomez` o `jose.gomez@dominio.com`;
+- cuando se pega un correo en el campo Usuario, se consulta **sólo** `jose.gomez`;
+- Maigret consulta por defecto los **500 sitios** de mayor ranking de su base incluida;
+- resultados de Maigret listados dentro de la aplicación;
+- apertura directa del perfil público encontrado;
+- imagen de perfil cuando Maigret logra extraer una URL de imagen;
+- metadatos enriquecidos conservados como evidencia técnica;
+- cancelación sin perder resultados ya obtenidos cuando la API instalada lo permite;
+- exportación del expediente en JSON, CSV y GraphML;
+- exportación adicional del **reporte HTML generado por el propio Maigret**;
+- loader de inicio que prepara realmente la base de Maigret antes de habilitar la búsqueda;
+- build Windows en un solo EXE mediante PyInstaller.
 
-## Uso responsable e institucional
+## Separación de modos
 
-El sistema está diseñado para consultar información públicamente accesible y organizar evidencia. No debe utilizarse para eludir autenticación, ejecutar recuperación de contraseñas, almacenar credenciales personales, automatizar acceso no autorizado ni convertir coincidencias de alias en afirmaciones de identidad sin evidencia adicional.
+### Usuario — Maigret
 
-La existencia de `@usuario` en varios servicios **no prueba** que todos los perfiles pertenezcan a la misma persona. La interfaz conserva esta distinción mediante estados y niveles de confianza.
+Es el flujo funcional principal. La entrada se normaliza antes de llamar a Maigret. No se generan variantes desde nombres ni teléfonos y no se confunde una coincidencia de alias con identidad demostrada.
+
+Ejemplos equivalentes:
+
+```text
+jose.gomez
+@jose.gomez
+jose.gomez@afasasda.com
+```
+
+Los tres terminan consultando:
+
+```text
+jose.gomez
+```
+
+### Nombre
+
+Se registra como un objetivo independiente. En v0.2 no se transforma automáticamente en usernames ni se manda a Maigret. Esto evita producir ruido o presentar hipótesis débiles como resultados.
+
+### Teléfono
+
+Se normaliza y registra como un objetivo independiente. En v0.2 no se consulta con Maigret, ya que Maigret es un motor de usernames. La arquitectura queda preparada para incorporar después un adaptador específico para teléfono sin mezclar evidencias.
+
+## Uso responsable
+
+El sistema está diseñado para organizar información públicamente accesible. No elude autenticación, no realiza recuperación de contraseñas, no almacena credenciales y no incorpora técnicas de acceso no autorizado.
+
+Una coincidencia de username prueba que ese alias fue detectado por Maigret en un servicio concreto; **no prueba por sí sola que todos los perfiles encontrados pertenezcan a una misma persona**.
 
 ## Instalación rápida en Windows / VS Code
 
@@ -40,71 +71,64 @@ También puede usar:
 .\scripts\run.ps1
 ```
 
-## Ejecutar pruebas
+## Pruebas
 
 ```powershell
 python -m pip install --group dev
 pytest
 ```
 
+La suite incluye un smoke test contra la API Python instalada de Maigret para detectar incompatibilidades de integración.
+
 ## Empaquetar EXE
-
-```powershell
-python -m pip install -e ".[desktop]"
-python -m pip install --group packaging
-python -m PyInstaller --clean --noconfirm OsintEngine.spec
-```
-
-O:
 
 ```powershell
 .\scripts\build.ps1
 ```
 
-El resultado se genera en:
+El script instala dependencias, ejecuta pruebas, empaqueta y calcula SHA-256. El ejecutable queda en:
 
 ```text
 dist\OSINT_Engine.exe
 ```
+
+`OsintEngine.spec` incluye los módulos, plantillas y recursos de Maigret necesarios para que el reporte y la base de sitios también estén disponibles en el ejecutable.
+
+## Exportaciones
+
+Por defecto se guardan en:
+
+```text
+%USERPROFILE%\Documents\OSINT_Engine\exports
+```
+
+Para una investigación por usuario se generan:
+
+```text
+osint_<caso>.json
+osint_<caso>.csv
+osint_<caso>.graphml
+maigret_<caso>.html
+```
+
+El último archivo es el reporte HTML nativo de Maigret construido a partir de los resultados de la ejecución actual.
 
 ## Estructura
 
 ```text
 app/                      Interfaz Flet
 src/osint_engine/
-  adapters/               Frontera con motores externos
+  adapters/               Integración con motores externos
   engine.py               Orquestación de investigación
   models.py               Modelos de hallazgo/evidencia
-  normalization.py        Normalización de identificadores
+  normalization.py        Normalización de objetivos
   correlation.py          Dedupl./confianza conservadora
-  exporters.py            JSON, CSV y GraphML
+  exporters.py            JSON, CSV, GraphML y reporte Maigret
   security.py             Redacción para auditoría/UI
-tests/                    Pruebas unitarias
+tests/                    Pruebas unitarias e integración ligera
 docs/                     Arquitectura, seguridad y terceros
 scripts/                  Ejecución y build reproducible
 OsintEngine.spec          PyInstaller Windows
-```
-
-## Motores
-
-### Maigret
-
-Se usa como **librería Python**, no mediante scraping propio ni invocación opaca. En v0.1 se consulta un subconjunto de sitios de mayor ranking y se excluyen por defecto categorías `nsfw` y `dating`.
-
-### SpiderFoot
-
-Existe una frontera `SpiderFootAdapter`, pero no se incluye el runtime en v0.1. Esto permite auditar y fijar una versión antes de habilitar módulos específicos.
-
-### Osintgram
-
-No se empaqueta. Su modelo de autenticación y licencia requieren una revisión separada antes de cualquier integración institucional.
-
-## Datos y exportaciones
-
-La aplicación no persiste automáticamente una investigación. Sólo se escriben archivos cuando el operador pulsa **Exportar evidencia**. Por defecto se guardan en:
-
-```text
-%USERPROFILE%\Documents\OSINT_Engine\exports
 ```
 
 No suba resultados reales al repositorio.

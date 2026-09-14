@@ -2,10 +2,16 @@ import asyncio
 import logging
 from threading import Event
 
-from osint_engine.adapters.maigret_adapter import _ProgressNotifier
+from osint_engine.adapters.maigret_adapter import MaigretAdapter, _ProgressNotifier
+from osint_engine.normalization import UsernameCandidate
 
 
 class _FoundStatus:
+    def __init__(self, ids_data=None):
+        self.ids_data = ids_data or {}
+        self.query_time = 0.25
+        self.tags = ["social"]
+
     def is_found(self):
         return True
 
@@ -61,6 +67,41 @@ def test_progress_notifier_does_not_mark_cancelled_run_complete():
     notifier.finish()
 
     assert events[-1][1] == 1
+
+
+def test_to_findings_reads_profile_metadata_from_maigret_status():
+    candidate = UsernameCandidate(
+        value="jose.gomez",
+        origin="provided_username",
+        confidence=1.0,
+        relation="provided_username",
+        parent_value="jose.gomez",
+    )
+    status = _FoundStatus(
+        {
+            "image": "https://example.test/avatar.jpg",
+            "fullname": "José Gómez",
+            "location": "México",
+        }
+    )
+    findings = MaigretAdapter._to_findings(
+        candidate,
+        {
+            "GitHub": {
+                "status": status,
+                "url_user": "https://github.com/jose.gomez",
+                "url_main": "https://github.com/",
+                "http_status": 200,
+                "rank": 1,
+            }
+        },
+    )
+
+    assert len(findings) == 1
+    evidence = findings[0].evidence
+    assert evidence["profile_image_url"] == "https://example.test/avatar.jpg"
+    assert evidence["ids_data"]["fullname"] == "José Gómez"
+    assert evidence["query_time"] == 0.25
 
 
 def test_notifier_smoke_test_with_installed_maigret_api():

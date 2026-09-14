@@ -2,19 +2,23 @@ from __future__ import annotations
 
 import uuid
 from threading import Event
+from typing import Any
 
-from .adapters import MaigretAdapter, ProgressCallback, SpiderFootAdapter
+from .adapters import MaigretAdapter, ProgressCallback
 from .correlation import deduplicate_findings
 from .models import Finding, Investigation, InvestigationSeed, utc_now_iso
-from .normalization import normalize_seed, username_search_candidates, validate_seed
+from .normalization import normalize_seed, validate_seed
 
 
 class InvestigationEngine:
-    def __init__(self, maigret_top_sites: int = 250) -> None:
-        self.adapters = [
-            MaigretAdapter(top_sites=maigret_top_sites),
-            SpiderFootAdapter(),
-        ]
+    def __init__(self, maigret_top_sites: int = 500) -> None:
+        self.maigret = MaigretAdapter(top_sites=maigret_top_sites)
+        self.adapters = [self.maigret]
+
+    def prepare(self) -> dict[str, Any]:
+        """Inicializa dependencias pesadas antes de aceptar una investigación."""
+
+        return {"maigret_sites": self.maigret.prepare()}
 
     def run(
         self,
@@ -33,7 +37,6 @@ class InvestigationEngine:
             status="running",
         )
         investigation.findings.extend(self._seed_findings(normalized))
-        investigation.findings.extend(self._candidate_findings(normalized))
 
         for adapter in self.adapters:
             if cancel_event.is_set():
@@ -46,6 +49,7 @@ class InvestigationEngine:
             except Exception as exc:
                 investigation.notes.append(f"{adapter.info.name}: {exc}")
 
+        investigation.runtime_data["maigret_runs"] = self.maigret.report_runs()
         investigation.findings = deduplicate_findings(investigation.findings)
         if cancel_event.is_set():
             investigation.status = "cancelled"
@@ -70,31 +74,6 @@ class InvestigationEngine:
                     status="provided",
                     relation="seed",
                     evidence={"case_id": seed.case_id},
-                )
-            )
-        return findings
-
-    @staticmethod
-    def _candidate_findings(seed: InvestigationSeed) -> list[Finding]:
-        findings: list[Finding] = []
-        for candidate in username_search_candidates(seed):
-            if candidate.origin == "provided_username":
-                continue
-            findings.append(
-                Finding(
-                    finding_id=str(uuid.uuid4()),
-                    entity_type="username_candidate",
-                    value=candidate.value,
-                    source_engine="osint-engine",
-                    confidence=candidate.confidence,
-                    status="hypothesis",
-                    relation=candidate.relation,
-                    parent_value=candidate.parent_value,
-                    evidence={
-                        "rule": candidate.origin,
-                        "searched_by_maigret": True,
-                        "warning": "Hipótesis de alias; no prueba identidad.",
-                    },
                 )
             )
         return findings

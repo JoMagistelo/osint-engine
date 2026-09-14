@@ -15,7 +15,7 @@ def default_export_dir() -> Path:
 
 
 def safe_basename(investigation: Investigation) -> str:
-    case_id = "".join(ch for ch in investigation.seed.case_id if ch.isalnum() or ch in "-_" )
+    case_id = "".join(ch for ch in investigation.seed.case_id if ch.isalnum() or ch in "-_")
     return case_id or investigation.investigation_id[:8]
 
 
@@ -35,8 +35,17 @@ def export_csv(investigation: Investigation, directory: Path | None = None) -> P
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"osint_{safe_basename(investigation)}.csv"
     fields = [
-        "finding_id", "entity_type", "value", "platform", "source_engine",
-        "source_url", "confidence", "status", "relation", "parent_value", "retrieved_at",
+        "finding_id",
+        "entity_type",
+        "value",
+        "platform",
+        "source_engine",
+        "source_url",
+        "confidence",
+        "status",
+        "relation",
+        "parent_value",
+        "retrieved_at",
     ]
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
@@ -52,7 +61,7 @@ def export_graphml(investigation: Investigation, directory: Path | None = None) 
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"osint_{safe_basename(investigation)}.graphml"
 
-    root_label = investigation.seed.person_name or "Investigación"
+    root_label = investigation.seed.person_name or investigation.seed.username or "Investigación"
     nodes = [("root", root_label, "investigation")]
     edges: list[tuple[str, str, str]] = []
     value_to_id: dict[str, str] = {}
@@ -86,10 +95,34 @@ def export_graphml(investigation: Investigation, directory: Path | None = None) 
     return path
 
 
+def export_maigret_html(
+    investigation: Investigation,
+    directory: Path | None = None,
+) -> Path | None:
+    """Genera el reporte HTML usando directamente el generador oficial de Maigret."""
+
+    username_results = investigation.runtime_data.get("maigret_runs") or []
+    if not username_results:
+        return None
+
+    from maigret.report import generate_report_context, save_html_report
+
+    directory = directory or default_export_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"maigret_{safe_basename(investigation)}.html"
+    context = generate_report_context(username_results)
+    save_html_report(str(path), context)
+    return path
+
+
 def export_all(investigation: Investigation, directory: Path | None = None) -> list[Path]:
     directory = directory or default_export_dir()
-    return [
+    paths = [
         export_json(investigation, directory),
         export_csv(investigation, directory),
         export_graphml(investigation, directory),
     ]
+    maigret_report = export_maigret_html(investigation, directory)
+    if maigret_report is not None:
+        paths.append(maigret_report)
+    return paths

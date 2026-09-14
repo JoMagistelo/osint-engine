@@ -23,9 +23,11 @@ def json_safe(value: Any) -> Any:
 class InvestigationSeed:
     person_name: str = ""
     username: str = ""
-    email: str = ""
     phone: str = ""
     case_id: str = ""
+    # Conservados por compatibilidad con versiones anteriores. La interfaz 0.2
+    # limita el alcance operativo a nombre, usuario y teléfono.
+    email: str = ""
     derive_aliases: bool = False
 
     def non_empty_identifiers(self) -> dict[str, str]:
@@ -34,7 +36,6 @@ class InvestigationSeed:
             for key, value in {
                 "person_name": self.person_name,
                 "username": self.username,
-                "email": self.email,
                 "phone": self.phone,
             }.items()
             if value
@@ -69,8 +70,19 @@ class Investigation:
     status: str = "created"
     findings: list[Finding] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    # Datos efímeros para acciones posteriores a la ejecución, por ejemplo el
+    # reporte HTML oficial de Maigret. Nunca se serializan ni se persisten.
+    runtime_data: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def to_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload["findings"] = [f.to_dict() for f in self.findings]
-        return json_safe(payload)
+        return json_safe(
+            {
+                "investigation_id": self.investigation_id,
+                "seed": asdict(self.seed),
+                "started_at": self.started_at,
+                "finished_at": self.finished_at,
+                "status": self.status,
+                "findings": [finding.to_dict() for finding in self.findings],
+                "notes": list(self.notes),
+            }
+        )
