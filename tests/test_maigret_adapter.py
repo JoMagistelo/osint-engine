@@ -73,7 +73,9 @@ def test_prepare_loads_packaged_maigret_database():
     adapter = MaigretAdapter(top_sites=5)
     count = adapter.prepare()
 
-    assert 1 <= count <= 5
+    # ranked_sites_dict(top=N) usa el ranking de Maigret y puede incluir
+    # varios sitios empatados en el umbral. No se debe recortar esa salida.
+    assert count >= 5
     assert adapter._sites is not None
     assert len(adapter._sites) == count
 
